@@ -11,6 +11,8 @@ GLOBAL_LIST_EMPTY(antagonists)
 	var/datum/mind/owner
 	/// Should the owner mob get a greeting text? Determines whether or not the `greet()` proc is called.
 	var/silent = FALSE
+	/// Path to the sound, that will played on `greet()` call. If `silent` is set to `TRUE`, than it won't be played too.
+	var/greet_sound_path
 	/// List of other antag datum types that this type can't coexist with.
 	var/list/antag_datum_blacklist
 	/// Used to determine if the player jobbanned from this role. Things like `SPECIAL_ROLE_TRAITOR` should go here to determine the role.
@@ -19,6 +21,10 @@ GLOBAL_LIST_EMPTY(antagonists)
 	var/replace_banned = TRUE
 	/// List of objectives connected to this datum.
 	var/datum/objective_holder/objective_holder
+	/// If our antag is offstation (e.g. Nukies, Wizard)
+	var/offstation = FALSE
+	/// Factions that will be set to our mind's mob. If empty or null - will be ignored.
+	var/list/factions
 	/// Antagonist datum specific information that appears in the player's notes. Information stored here will be removed when the datum is removed from the player.
 	var/antag_memory
 	/// The special role that will be applied to the owner's `special_role` var. i.e. `SPECIAL_ROLE_TRAITOR`, `SPECIAL_ROLE_VAMPIRE`.
@@ -35,10 +41,17 @@ GLOBAL_LIST_EMPTY(antagonists)
 	var/clown_removal_text = "You are clumsy again."
 	/// The url page name for this antagonist, appended to the end of the wiki url in the form of: [GLOB.configuration.url.wiki_url]/index.php/[wiki_page_name]
 	var/wiki_page_name
+	/// Will our mob be stripped before outfit equip or not.
+	var/strip = FALSE
+	/// Default outfit our owner's mob will be equipped. Will be used if not specialization present in `outfit_by_species`
+	var/default_outfit
+	/// Outfit override for our owner's mob. If mobs of specific species should have different outfit, it must be present here.
+	var/list/outfit_by_species
 
 /datum/antagonist/New()
 	GLOB.antagonists += src
 	objective_holder = new(src)
+	onwer.current?.faction = list("Station")
 
 /datum/antagonist/Destroy(force, ...)
 	qdel(objective_holder)
@@ -71,12 +84,14 @@ GLOBAL_LIST_EMPTY(antagonists)
  * Adds the owner to their respective gamemode's list. For example `SSticker.mode.traitors |= owner`.
  */
 /datum/antagonist/proc/add_owner_to_gamemode()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 /**
  * Removes the owner from their respective gamemode's list. For example `SSticker.mode.traitors -= owner`.
  */
 /datum/antagonist/proc/remove_owner_from_gamemode()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 /**
@@ -203,6 +218,7 @@ GLOBAL_LIST_EMPTY(antagonists)
  * Give the antagonist their objectives. Base proc, override as needed.
  */
 /datum/antagonist/proc/give_objectives()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 /**
@@ -259,7 +275,12 @@ GLOBAL_LIST_EMPTY(antagonists)
  * Proc called when the datum is given to a mind.
  */
 /datum/antagonist/proc/on_gain()
+	SHOULD_CALL_PARENT(TRUE)
 	owner.special_role = special_role
+	if (length(factions))
+		owner.mind.current.faction = factions.Copy()
+	if (!owner.mind.offstation_role)
+		owner.mind.offstation_role = offstation
 	add_owner_to_gamemode()
 	if(give_objectives)
 		give_objectives()
@@ -268,6 +289,7 @@ GLOBAL_LIST_EMPTY(antagonists)
 		messages.Add(greet())
 		messages.Add(owner.prepare_announce_objectives())
 	apply_innate_effects()
+	equip()
 	messages.Add(finalize_antag())
 	if(wiki_page_name)
 		messages.Add("<span class='motd'>For more information, check the wiki page: ([GLOB.configuration.url.wiki_url]/index.php/[wiki_page_name])</span>")
@@ -326,8 +348,10 @@ GLOBAL_LIST_EMPTY(antagonists)
 /datum/antagonist/proc/greet()
 	var/list/messages = list()
 	. = messages
-	if(owner && owner.current)
+	if(owner?.current)
 		messages.Add("<span class='userdanger'>You are a [special_role]!</span>")
+	if(greet_sound_path)
+		SEND_SOUND(owner.current, sound(greet_sound_path))
 
 /**
  * Displays a message to the antag mob while the datum is being deleted, i.e. "Your powers are gone and you're no longer a vampire!"
@@ -335,25 +359,28 @@ GLOBAL_LIST_EMPTY(antagonists)
  * Called in `on_removal()` if silent is set to FALSE.
  */
 /datum/antagonist/proc/farewell()
-	if(owner && owner.current)
+	if(owner?.current)
 		to_chat(owner.current,"<span class='userdanger'>You are no longer a [special_role]! </span>")
 
 /**
  * Creates a new antagonist team.
  */
 /datum/antagonist/proc/create_team(datum/team/team)
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 /**
  * Returns the team the antagonist belongs to, if any.
  */
 /datum/antagonist/proc/get_team()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 /**
  * Give the antag any final information or items.
  */
 /datum/antagonist/proc/finalize_antag()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 //Individual roundend report
@@ -386,9 +413,11 @@ GLOBAL_LIST_EMPTY(antagonists)
 
 //Displayed at the end of roundend_category section
 /datum/antagonist/proc/roundend_report_footer()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
 // Called when the owner is cryo'd, for when you want things to happen on cryo and not deletion
 /datum/antagonist/proc/on_cryo()
+	SHOULD_CALL_PARENT(FALSE)
 	return
 
